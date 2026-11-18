@@ -74,13 +74,17 @@ const prevBtn = (page, sel) =>
 const nextBtn = (page, sel) =>
   page.locator('button, .btn, span, div').filter({ hasText: new RegExp(`^\\s*${sel.nextText}\\s*$`) }).first();
 
-const typeOf = async (page, sel) =>
-  clean(await page.locator(sel.type).innerText().catch(() => ''));
+const typeOf = async (page, sel) => {
+  const el = page.locator(sel.type).first();
+  if (!(await el.count().catch(() => 0))) return '';
+  return clean(await el.innerText({ timeout: 2000 }).catch(() => ''));
+};
 
 /** 翻到第 n 题（1 起） */
 export async function gotoQuestion(page, n, sel) {
   for (let i = 0; i < 20; i++) {
     const t = await typeOf(page, sel);
+    if (!t) return false;
     if (new RegExp(`^${n}[.\\s]`).test(t)) return true;
     const cur = Number((t.match(/^(\d+)/) || [])[1] || 0);
     const btn = cur > n ? prevBtn(page, sel) : nextBtn(page, sel);
@@ -96,6 +100,7 @@ export async function collectQuestions(page, sel, { max = 15, startAtFirst = tru
   if (startAtFirst) {
     for (let i = 0; i < 20; i++) {
       const t = await typeOf(page, sel);
+      if (!t) break;
       if (/^1[.\s]/.test(t)) break;
       const btn = prevBtn(page, sel);
       if (!(await btn.count())) break;

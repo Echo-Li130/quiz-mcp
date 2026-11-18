@@ -28,6 +28,7 @@
   <div id="result"></div>
 
   <script>
+   (function () {
     const QUESTIONS = [
       { type: '1. 判断题', stem: '1 + 1 = 2。', options: [['A', '对'], ['B', '错']], answer: ['A'], kind: 'radio' },
       { type: '2. 单选题', stem: '2 + 2 等于多少？', options: [['A', '3'], ['B', '4'], ['C', '5']], answer: ['B'], kind: 'radio' },
@@ -103,6 +104,7 @@
     };
 
     render();
+   })();
   </script>
 </body>
 </html>

@@ -1,5 +1,9 @@
 # quiz-mcp
 
+[![CI](https://github.com/Echo-Li130/quiz-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Echo-Li130/quiz-mcp/actions/workflows/ci.yml)
+
+**中文** | [English](README.en.md)
+
 A **Model Context Protocol (MCP) server** for browser-based quiz/practice automation: it drives a real browser to collect questions, fill answers, submit, read the mastery score, and redo the paper when the score is too low.
 
 任何支持 MCP 的 AI agent（DeepSeek Harness、Claude Desktop、Cursor 等）都能把它当工具调用；也提供等价的 CLI，供不支持 MCP 的 agent 使用。
@@ -129,12 +133,18 @@ quiz_open → quiz_collect → quiz_answer(dryRun) → quiz_answer → quiz_subm
 
 ---
 
-## 开发
+## 测试与 CI
+
+两个测试都完全离线，使用内置 `test/fixture.html`，不访问任何外部网站、不需要登录：
 
 ```bash
-node test/selftest.mjs        # 引擎自测
-node test/mcp-client-test.mjs # MCP 协议自测（起真实 server + fixture）
+node test/selftest.mjs        # 引擎：采集 4 题 → 作答 → 提交，期望 SELFTEST PASS 4/4
+node test/mcp-client-test.mjs # MCP 协议：真客户端连真 server，期望 MCP TEST PASS
 ```
+
+每次 push 到 `main` 或提交 PR，GitHub Actions 都会在 Linux 上自动跑这两项（见
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）。托管 runner 里 Chrome 需要关闭沙箱，
+CI 通过环境变量 `QUIZ_NO_SANDBOX=1` 传递，本地一般不需要设置。
 
 ## License
 

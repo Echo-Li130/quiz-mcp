@@ -55,6 +55,7 @@ export function loadConfig(overrides = {}) {
     cdpPort: 9333,
     browser: 'auto',
     headless: false,
+    noSandbox: process.env.QUIZ_NO_SANDBOX === '1',
     windowSize: '1280x900',
     fixturePath: process.env.QUIZ_FIXTURE || '',
     ...(local.site || {}),

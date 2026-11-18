@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # GitHub 的托管 runner 里 Chrome 需要关闭沙箱
+      QUIZ_NO_SANDBOX: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Engine selftest (collect -> answer -> submit)
+        run: node test/selftest.mjs
+
+      - name: MCP protocol test
+        run: node test/mcp-client-test.mjs

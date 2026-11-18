@@ -1,0 +1,35 @@
+{
+  "site": {
+    "host": "https://example.edu/",
+    "cdpPort": 9333,
+    "browser": "auto",
+    "headless": false,
+    "windowSize": "1280x900"
+  },
+  "selectors": {
+    "title": ".paper-title",
+    "questionRoot": ".question",
+    "section": ".question-section",
+    "type": ".question-type",
+    "stem": ".question-stem",
+    "radioItem": ".options li",
+    "radioLabel": ".option-label",
+    "radioChecked": "i.checked",
+    "multiItem": ".options.multi li",
+    "multiLabel": ".option-label",
+    "multiChecked": "is-checked",
+    "blankInput": ".question input[type=text]",
+    "progress": ".progress-value",
+    "nextText": "下一题",
+    "prevText": "上一题",
+    "submit": "button.submit",
+    "analysisText": "查看解析",
+    "redoText": "重新答题",
+    "promptRoot": ".el-message-box, .el-dialog__wrapper"
+  },
+  "behavior": {
+    "waitAfterClickMs": 220,
+    "waitAfterNextMs": 600,
+    "navigationTimeoutMs": 60000
+  }
+}

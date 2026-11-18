@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>quiz-mcp fixture</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 24px; max-width: 720px; }
+    .question { border: 1px solid #ddd; border-radius: 8px; padding: 14px 18px; }
+    .question-stem { font-weight: 600; margin: 8px 0 12px; }
+    .options { list-style: none; padding: 0; }
+    .options li { padding: 6px 0; cursor: pointer; }
+    .options li.is-checked { color: #0a7; font-weight: 600; }
+    .options .option-label { display: inline-block; width: 22px; }
+    .nav { margin-top: 16px; display: flex; gap: 10px; }
+    .blank { margin: 10px 0; }
+    #result { margin-top: 16px; color: #06c; }
+  </style>
+</head>
+<body>
+  <h2>自测卷</h2>
+  <div id="app"></div>
+  <div class="nav">
+    <button id="prev">上一题</button>
+    <button id="next">下一题</button>
+    <button class="submit" id="submit">提交</button>
+  </div>
+  <div class="progress-value" id="progress">0%</div>
+  <div id="result"></div>
+
+  <script>
+    const QUESTIONS = [
+      { type: '1. 判断题', stem: '1 + 1 = 2。', options: [['A', '对'], ['B', '错']], answer: ['A'], kind: 'radio' },
+      { type: '2. 单选题', stem: '2 + 2 等于多少？', options: [['A', '3'], ['B', '4'], ['C', '5']], answer: ['B'], kind: 'radio' },
+      { type: '3. 多选题', stem: '下列哪些是偶数？', options: [['A', '2'], ['B', '3'], ['C', '4'], ['D', '5']], answer: ['A', 'C'], kind: 'multi' },
+      { type: '4. 填空题', stem: '3 + 3 = ____。', answer: '6', kind: 'blank' },
+    ];
+
+    const state = { index: 0, picks: {}, blanks: {} };
+    window.__quizState = state; // 供自测断言用
+    const app = document.getElementById('app');
+
+    function render() {
+      const q = QUESTIONS[state.index];
+      document.getElementById('progress').textContent =
+        Math.round((Object.keys(state.picks).length / QUESTIONS.length) * 100) + '%';
+
+      if (q.kind === 'blank') {
+        app.innerHTML = `
+          <div class="question">
+            <div class="question-type">${q.type}</div>
+            <div class="question-stem">${q.stem}</div>
+            <div class="blank"><input type="text" id="blank-${state.index}" /></div>
+          </div>`;
+        const input = document.getElementById(`blank-${state.index}`);
+        input.value = state.blanks[state.index] || '';
+        input.addEventListener('input', () => { state.blanks[state.index] = input.value; });
+        return;
+      }
+
+      const cls = q.kind === 'multi' ? 'options multi' : 'options';
+      app.innerHTML = `
+        <div class="question">
+          <div class="question-type">${q.type}</div>
+          <div class="question-stem">${q.stem}</div>
+          <ul class="${cls}">
+            ${q.options.map(([label, text]) => `
+              <li data-label="${label}" class="${(state.picks[state.index] || []).includes(label) ? 'is-checked' : ''}">
+                <span class="option-label">${label}</span>${text}
+              </li>`).join('')}
+          </ul>
+        </div>`;
+
+      app.querySelectorAll('.options li').forEach((li) => {
+        li.addEventListener('click', () => {
+          const label = li.dataset.label;
+          if (q.kind === 'multi') {
+            const cur = new Set(state.picks[state.index] || []);
+            cur.has(label) ? cur.delete(label) : cur.add(label);
+            state.picks[state.index] = [...cur];
+          } else {
+            state.picks[state.index] = [label];
+          }
+          render();
+        });
+      });
+    }
+
+    document.getElementById('prev').onclick = () => { if (state.index > 0) { state.index--; render(); } };
+    document.getElementById('next').onclick = () => { if (state.index < QUESTIONS.length - 1) { state.index++; render(); } };
+    document.getElementById('submit').onclick = () => {
+      let correct = 0;
+      QUESTIONS.forEach((q, i) => {
+        if (q.kind === 'blank') {
+          if (String(state.blanks[i] || '').trim() === q.answer) correct++;
+        } else {
+          const picked = (state.picks[i] || []).slice().sort().join(',');
+          if (picked === q.answer.slice().sort().join(',')) correct++;
+        }
+      });
+      const mastery = Math.round((correct / QUESTIONS.length) * 100);
+      document.getElementById('result').textContent =
+        `${mastery}% 掌握度 总题数 ${QUESTIONS.length} 已答对 ${correct}`;
+    };
+
+    render();
+  </script>
+</body>
+</html>

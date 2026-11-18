@@ -1,0 +1,30 @@
+{
+  "name": "quiz-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for browser-based quiz automation: collect questions, answer, submit, read mastery, redo.",
+  "type": "module",
+  "bin": {
+    "quiz-mcp": "bin/quiz-mcp.mjs",
+    "quiz-cli": "bin/quiz-cli.mjs"
+  },
+  "scripts": {
+    "start": "node bin/quiz-mcp.mjs",
+    "test": "node test/selftest.mjs && node test/mcp-client-test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "playwright-core": "^1.65.1",
+    "zod": "^3.25.76"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "src",
+    "adapter",
+    "engine",
+    "docs"
+  ],
+  "license": "MIT"
+}

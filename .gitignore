@@ -1,0 +1,28 @@
+node_modules/
+.pnpm-store/
+.tools/
+
+# 浏览器持久化目录：含登录 Cookie，绝不能提交
+.profiles/
+profile/
+edge-profile/
+
+# 本地真实配置（含目标站点域名与选择器）
+adapter/config.json
+config.json
+.env
+
+# 运行时产物：题目、答案、结果、截图
+questions*.json
+answers*.json
+*-result-*.json
+snap*.json
+*.png
+*.webm
+run-log.jsonl
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

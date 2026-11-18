@@ -1,0 +1,141 @@
+# quiz-mcp
+
+A **Model Context Protocol (MCP) server** for browser-based quiz/practice automation: it drives a real browser to collect questions, fill answers, submit, read the mastery score, and redo the paper when the score is too low.
+
+任何支持 MCP 的 AI agent（DeepSeek Harness、Claude Desktop、Cursor 等）都能把它当工具调用；也提供等价的 CLI，供不支持 MCP 的 agent 使用。
+
+> ⚠️ **免责声明**
+> 本项目仅用于**个人复习、自测与浏览器自动化学习**。
+> 使用前请自行确认目标平台的用户协议；**禁止**用于正式考试、代考、或任何会计入成绩的考核场景。
+> 仓库不包含任何题库、答案、账号或平台数据；作者不对使用后果负责。
+
+---
+
+## 隐私设计
+
+- 代码里**不含任何站点域名、平台 ID、姓名或学号**
+- 登录态只存在本地 `.profiles/`（已在 `.gitignore` 中排除），不会进入仓库
+- 不读取、不导出、不打印任何 Cookie
+- 题目、答案、结果文件都在 `.gitignore` 里，不会被提交
+
+---
+
+## 安装
+
+```bash
+git clone <this-repo> quiz-mcp
+cd quiz-mcp
+pnpm add playwright-core @modelcontextprotocol/sdk zod    # 或 npm i
+cp adapter/config.example.json adapter/config.json        # 然后填你自己的站点
+```
+
+要求：Node.js ≥ 20，本机装有 Chrome 或 Edge。
+
+## 第一次跑：五步
+
+```bash
+# 1) 验证引擎（内置 fixture，不需要网络）
+node test/selftest.mjs          # 期望输出 SELFTEST PASS 4/4
+
+# 2) 启动浏览器并打开你的练习页
+node bin/quiz-cli.mjs open --url "https://your-site.example/paper/123"
+#    弹出的窗口里手动登录一次；登录态会留在 .profiles/
+
+# 3) 采集题目（只读）
+node bin/quiz-cli.mjs collect --out questions.json
+
+# 4) 写答案文件 answers.json
+#    [{ "index": 1, "labels": ["A"] }, { "index": 2, "text": "答案" }]
+node bin/quiz-cli.mjs answer answers.json            # 默认演练，不点击
+node bin/quiz-cli.mjs answer answers.json --commit   # 真正填写
+
+# 5) 提交并看掌握度；不达标就重做
+node bin/quiz-cli.mjs submit --confirm
+node bin/quiz-cli.mjs redo
+```
+
+---
+
+## 接入 AI agent（MCP）
+
+### DeepSeek Harness（mcp-manager）
+
+```json
+{
+  "transport": "stdio",
+  "command": "node",
+  "args": ["<绝对路径>/quiz-mcp/bin/quiz-mcp.mjs"],
+  "startupTimeoutMs": 30000
+}
+```
+
+### Claude Desktop（`claude_desktop_config.json`）
+
+```json
+{
+  "mcpServers": {
+    "quiz": {
+      "command": "node",
+      "args": ["<绝对路径>/quiz-mcp/bin/quiz-mcp.mjs"]
+    }
+  }
+}
+```
+
+### Cursor（`~/.cursor/mcp.json`）
+
+```json
+{
+  "mcpServers": {
+    "quiz": {
+      "command": "node",
+      "args": ["<绝对路径>/quiz-mcp/bin/quiz-mcp.mjs"]
+    }
+  }
+}
+```
+
+> 若某个 agent 不支持 MCP，直接用同目录的 `bin/quiz-cli.mjs`，功能一一对应。
+
+---
+
+## 工具一览
+
+| 工具 | 作用 |
+|---|---|
+| `quiz_open` | 启动/复用浏览器并打开目标页（需要在窗口里手动登录一次） |
+| `quiz_status` | 当前地址、试卷标题、答题进度、是否在登录页 |
+| `quiz_probe` | 输出页面结构摘要，帮你写 adapter 选择器 |
+| `quiz_collect` | 采集当前试卷全部题目 |
+| `quiz_answer` | 按题号作答，**默认 dryRun，不点击页面** |
+| `quiz_submit` | 提交并返回掌握度，**必须 confirm:true** |
+| `quiz_analysis` | 打开解析页，返回错题与参考答案 |
+| `quiz_redo` | 点「重新答题」开新一轮 |
+| `quiz_close` | 关闭浏览器、释放 profile |
+
+一次典型编排：
+
+```
+quiz_open → quiz_collect → quiz_answer(dryRun) → quiz_answer → quiz_submit
+  ├─ 掌握度 ≥ 阈值 → 结束
+  └─ 否则 → quiz_analysis → quiz_redo → 再 collect
+```
+
+---
+
+## 适配自己的站点
+
+站点差异全部在 `adapter/config.json`。用 `quiz_probe` 找到选择器后填进去即可，详见 [adapter/README.md](adapter/README.md)，踩坑见 [docs/pitfalls.md](docs/pitfalls.md)。
+
+---
+
+## 开发
+
+```bash
+node test/selftest.mjs        # 引擎自测
+node test/mcp-client-test.mjs # MCP 协议自测（起真实 server + fixture）
+```
+
+## License
+
+MIT

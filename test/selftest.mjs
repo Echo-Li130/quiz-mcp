@@ -36,7 +36,11 @@ const SELECTORS = {
 
 const behavior = { waitAfterClickMs: 120, waitAfterNextMs: 300 };
 
-const browser = await chromium.launch({ executablePath: findBrowser(), headless: true });
+const browser = await chromium.launch({
+  executablePath: findBrowser(),
+  headless: true,
+  args: process.env.QUIZ_NO_SANDBOX === '1' ? ['--no-sandbox'] : [],
+});
 const page = await browser.newPage();
 await page.setContent(fs.readFileSync(path.join(ROOT, 'test/fixture.html'), 'utf8'), { waitUntil: 'load' });
 

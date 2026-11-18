@@ -52,6 +52,7 @@ export class BrowserSession {
         `--window-size=${this.cfg.site.windowSize}`,
       ];
       if (this.cfg.site.headless) args.push('--headless=new');
+      if (this.cfg.site.noSandbox) args.push('--no-sandbox');
       args.push('about:blank');
 
       spawn(exe, args, { detached: true, stdio: 'ignore' }).unref();

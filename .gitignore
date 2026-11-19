@@ -18,6 +18,8 @@ answers*.json
 answer-cache*.json
 adapter/last-questions.json
 adapter/corrections.json
+adapter/auto.stop
+adapter/auto.log
 *-result-*.json
 snap*.json
 *.png

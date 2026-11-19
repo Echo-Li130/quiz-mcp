@@ -17,6 +17,7 @@ import { submitPaper } from '../src/core/submit.mjs';
 import { solveQuestions } from '../src/core/solver/index.mjs';
 import { learnCorrections } from '../src/core/solver/learn.mjs';
 import { clearQuestions } from '../src/core/solver/cache.mjs';
+import { runAuto } from '../src/core/auto/runner.mjs';
 
 const LAST_QUESTIONS = path.join(ROOT, 'adapter', 'last-questions.json');
 
@@ -99,6 +100,11 @@ async function main() {
       if (!code) return out({ ok: false, error: '用法: eval --b64 <base64 的 JS>' });
       const result = await page.evaluate(code);
       return out({ ok: true, result });
+    }
+    case 'closetab': {
+      const page = session.context.pages().find((p) => p.url().includes(value('url', 'chat.deepseek.com')));
+      if (page) await page.close();
+      return out({ ok: true, closed: Boolean(page) });
     }
     case 'back': {
       const page = await session.ensure();
@@ -226,6 +232,33 @@ async function main() {
       const learned = learnCorrections(cfg, items, saved.questions || []);
       return out({ ok: true, learned, total: (saved.questions || []).length });
     }
+    case 'auto': {
+      const page = await session.ensure();
+      if (!/learnPage/.test(page.url())) {
+        return out({ ok: false, error: '请先把浏览器停在某个知识点的 learnPage（学习页）再启动 auto' });
+      }
+      const stopFile = path.resolve(value('stop-file', 'adapter/auto.stop'));
+      const intervalSec = Number(value('interval', '30'));
+      const threshold = Number(value('threshold', '90'));
+      const attempts = Number(value('attempts', '3'));
+      const maxPoints = Number(value('points', '0'));
+      if (fs.existsSync(stopFile)) fs.rmSync(stopFile, { force: true });
+
+      const log = (entry) => process.stdout.write(`${JSON.stringify(entry)}\n`);
+      log({ event: 'auto-start', intervalSec, threshold, attempts, maxPoints, stopFile });
+      const done = await runAuto({
+        cfg,
+        session,
+        intervalSec,
+        threshold,
+        attempts,
+        maxPoints,
+        stopFile,
+        lastQuestionsFile: LAST_QUESTIONS,
+        log,
+      });
+      return out({ ok: true, done });
+    }
     case 'cache': {
       if (argv[1] !== 'clear') return out({ ok: false, error: '用法: quiz-cli cache clear --paper' });
       let saved;
@@ -250,7 +283,7 @@ async function main() {
       return out({
         ok: false,
         error: '未知命令',
-        usage: 'quiz-cli <open|status|probe|tabs|focus|shot|rects|click|clicktext|back|collect|solve|learn|cache|answer|submit|analysis|redo|close> [--url X] [--max N] [--out f] [--mode web|api] [--batch N] [--refresh] [--commit] [--confirm] [--learn] [--all] [--file f] [--detail] [--clear-on-pass] [--threshold N]',
+        usage: 'quiz-cli <open|status|probe|tabs|focus|shot|rects|click|clicktext|back|collect|solve|learn|cache|auto|answer|submit|analysis|redo|close> [--url X] [--max N] [--out f] [--mode web|api] [--batch N] [--refresh] [--commit] [--confirm] [--learn] [--all] [--file f] [--detail] [--clear-on-pass] [--threshold N] [--interval S] [--attempts N] [--points N] [--stop-file f]',
       });
   }
 }

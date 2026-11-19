@@ -73,8 +73,10 @@ export async function solveQuestions({
       const raw = await call(pending);
       let { answers: got, unresolved: missing } = parseAnswerText(jsonAnswersToText(raw) || raw, pending);
 
-      if (missing.length) {
-        const retryQuestions = pending.filter((q) => missing.some((m) => m.index === q.index));
+      const retryQuestions = missing.length
+        ? pending.filter((q) => missing.some((m) => m.index === q.index))
+        : [];
+      if (retryQuestions.length) {
         try {
           const rawRetry = await call(retryQuestions);
           const second = parseAnswerText(jsonAnswersToText(rawRetry) || rawRetry, retryQuestions);
@@ -82,6 +84,23 @@ export async function solveQuestions({
           missing = second.unresolved;
         } catch {
           /* 重试失败就保留第一次的解析结果 */
+        }
+      }
+
+      // 仍然缺的题逐题再问一次：整批被截断/限流时，单题请求更容易成功。
+      if (missing.length) {
+        for (const question of retryQuestions.slice(0, 3)) {
+          if (!missing.some((m) => m.index === question.index)) continue;
+          try {
+            const rawOne = await call([question]);
+            const one = parseAnswerText(jsonAnswersToText(rawOne) || rawOne, [question]);
+            if (one.answers.length) {
+              got = got.concat(one.answers);
+              missing = missing.filter((m) => m.index !== question.index);
+            }
+          } catch {
+            /* 单题重试失败：保留在 unresolved */
+          }
         }
       }
 

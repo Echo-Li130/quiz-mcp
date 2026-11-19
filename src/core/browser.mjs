@@ -75,7 +75,12 @@ export class BrowserSession {
       const hit = pages.find((p) => p.url().startsWith(host));
       if (hit) return hit;
     }
-    return pages[0] || null;
+    // 学习页在另一个子域，且求解器会常驻一个 chat.deepseek.com 标签页：
+    // 都匹配不到配置域名时，优先挑「不是空白页、也不是求解器页」的那个。
+    const preferred = pages.find(
+      (p) => !/^about:blank/.test(p.url()) && !/chat\.deepseek\.com/.test(p.url()),
+    );
+    return preferred || pages[0] || null;
   }
 
   /** 打开目标页；若配置了 fixturePath 则加载本地自测页 */

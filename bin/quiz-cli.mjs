@@ -95,7 +95,10 @@ async function main() {
       return out({ ok: true, text, url: page.url() });
     }
     case 'eval': {
-      const page = await session.ensure();
+      await session.ensure();
+      const match = value('url', '');
+      const target = match ? session.context.pages().find((p) => p.url().includes(match)) : null;
+      const page = target || (await session.ensure());
       const code = Buffer.from(value('b64', ''), 'base64').toString('utf8');
       if (!code) return out({ ok: false, error: '用法: eval --b64 <base64 的 JS>' });
       const result = await page.evaluate(code);
@@ -106,6 +109,14 @@ async function main() {
       if (page) await page.close();
       return out({ ok: true, closed: Boolean(page) });
     }
+    case 'newtab': {
+      await session.ensure();
+      const page = await session.context.newPage();
+      const url = value('url', 'about:blank');
+      await page.goto(url, { waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.bringToFront();
+      return out({ ok: true, url: page.url() });
+    }
     case 'back': {
       const page = await session.ensure();
       await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});
@@ -113,7 +124,10 @@ async function main() {
       return out({ ok: true, url: page.url() });
     }
     case 'shot': {
-      const page = await session.ensure();
+      await session.ensure();
+      const match = value('url', '');
+      const target = match ? session.context.pages().find((p) => p.url().includes(match)) : null;
+      const page = target || (await session.ensure());
       await page.bringToFront();
       const file = path.resolve(value('out', 'shot.png'));
       await page.screenshot({ path: file });

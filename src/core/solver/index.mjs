@@ -47,7 +47,7 @@ export async function solveQuestions({
   const solveFn = provider?.solve
     || (selected === 'api' ? (qs) => solveViaApi(qs, cfg) : null);
   let webPage = null;
-  let loginRequired = false;
+  let keepOpen = false;
 
   const call = async (qs) => {
     if (solveFn) return solveFn(qs);
@@ -113,11 +113,11 @@ export async function solveQuestions({
       unresolved.push(...missing);
     }
   } catch (error) {
-    if (error?.code === 'login-required') loginRequired = true;
+    if (error?.code === 'login-required' || error?.code === 'web-empty-reply') keepOpen = true;
     if (!answers.length) throw error;
     unresolved.push({ index: 0, reason: error?.code || 'solver-error' });
   } finally {
-    if (webPage && !loginRequired) await webPage.close().catch(() => {});
+    if (webPage && !keepOpen) await webPage.close().catch(() => {});
   }
 
   answers.sort((a, b) => a.index - b.index);

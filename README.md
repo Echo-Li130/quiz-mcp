@@ -8,9 +8,9 @@ A **Model Context Protocol (MCP) server** for browser-based quiz/practice automa
 
 任何支持 MCP 的 AI agent（DeepSeek Harness、Claude Desktop、Cursor 等）都能把它当工具调用；也提供等价的 CLI，供不支持 MCP 的 agent 使用。
 
-> ⚠️ **免责声明**
-> 本项目仅用于**个人复习、自测与浏览器自动化学习**。
-> 使用前请自行确认目标平台的用户协议；**禁止**用于正式考试、代考、或任何会计入成绩的考核场景。
+> ⚠️ **说明**
+> 本项目用于**浏览器自动化学习与实践**。
+> 使用前请自行确认目标平台的使用条款。
 > 仓库不包含任何题库、答案、账号或平台数据；作者不对使用后果负责。
 
 ---

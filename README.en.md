@@ -8,10 +8,9 @@ A **Model Context Protocol (MCP) server** for browser-based quiz and practice au
 
 Any MCP-capable agent (DeepSeek Harness, Claude Desktop, Cursor, …) can call it as a tool. An equivalent CLI is included for agents that don't speak MCP.
 
-> ⚠️ **Disclaimer**
-> This project is for **personal review, self-testing, and browser-automation learning only**.
-> You are responsible for checking the target platform's terms of service. **Do not** use it for graded exams,
-> for taking an exam on someone else's behalf, or in any assessment scenario.
+> ⚠️ **Note**
+> This project is for **browser-automation learning and practice**.
+> You are responsible for checking the target platform's terms of service.
 > The repository contains no question banks, answers, accounts, or platform data. The authors take no responsibility for misuse.
 
 ---

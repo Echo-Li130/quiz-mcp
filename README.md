@@ -24,6 +24,12 @@ A **Model Context Protocol (MCP) server** for browser-based quiz/practice automa
 
 ---
 
+## 教程（中文）
+
+从「粘贴链接 + 一句话」到交卷看掌握度的完整流程：见 [docs/tutorial-continue-practice.md](docs/tutorial-continue-practice.md)。
+
+---
+
 ## 安装
 
 ```bash

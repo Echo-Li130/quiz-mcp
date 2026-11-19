@@ -20,6 +20,10 @@ adapter/last-questions.json
 adapter/corrections.json
 adapter/auto.stop
 adapter/auto.log
+adapter/queue.json
+adapter/batch*.log
+adapter/batch*.jsonl
+adapter/batch-run*.log
 *-result-*.json
 snap*.json
 *.png

@@ -24,6 +24,12 @@ Any MCP-capable agent (DeepSeek Harness, Claude Desktop, Cursor, …) can call i
 
 ---
 
+## Tutorial (Chinese)
+
+A walkthrough from a one-line prompt to a submitted paper and its mastery score: [docs/tutorial-continue-practice.md](docs/tutorial-continue-practice.md).
+
+---
+
 ## Install
 
 ```bash

@@ -93,6 +93,13 @@ async function main() {
       await page.waitForTimeout(1500);
       return out({ ok: true, text, url: page.url() });
     }
+    case 'eval': {
+      const page = await session.ensure();
+      const code = Buffer.from(value('b64', ''), 'base64').toString('utf8');
+      if (!code) return out({ ok: false, error: '用法: eval --b64 <base64 的 JS>' });
+      const result = await page.evaluate(code);
+      return out({ ok: true, result });
+    }
     case 'back': {
       const page = await session.ensure();
       await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});

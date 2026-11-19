@@ -9,12 +9,18 @@ import { normalizeAnswer } from './parse.mjs';
 
 const norm = (text) => String(text || '').replace(/[^\u4e00-\u9fa5A-Za-z0-9]/g, '');
 
-function similar(a, b) {
-  if (!a || !b) return false;
-  if (a === b) return true;
-  const width = Math.min(12, a.length, b.length);
-  if (width < 6) return false;
-  return a.slice(0, width) === b.slice(0, width) || a.includes(b) || b.includes(a);
+function commonPrefix(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+  return i;
+}
+
+/** 相似度：相等最高；其次是包含关系；否则看公共前缀长度。 */
+function score(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 10000;
+  if (a.includes(b) || b.includes(a)) return 5000 + Math.min(a.length, b.length);
+  return commonPrefix(a, b);
 }
 
 export function matchQuestions(items, questions) {
@@ -22,8 +28,18 @@ export function matchQuestions(items, questions) {
   for (const item of items) {
     const stem = norm(item.stem);
     if (!stem) continue;
-    const hit = questions.find((q) => similar(stem, norm(q.stem)));
-    if (hit) pairs.push({ question: hit, correctAnswer: item.correctAnswer });
+    // 同一知识点里题干前缀常常相同（“加强和促进…大团结，必须依托…”），
+    // 取相似度最高的那一题，而不是第一个前缀命中的题。
+    let best = null;
+    let bestScore = 0;
+    for (const question of questions) {
+      const s = score(stem, norm(question.stem));
+      if (s > bestScore) {
+        bestScore = s;
+        best = question;
+      }
+    }
+    if (best && bestScore >= 10) pairs.push({ question: best, correctAnswer: item.correctAnswer });
   }
   return pairs;
 }

@@ -34,9 +34,13 @@ const collect = await client.callTool({ name: 'quiz_collect', arguments: { max: 
 const parsed = JSON.parse(String(collect.content?.[0]?.text || '{}'));
 console.log('quiz_collect: count =', parsed.count);
 
+const solve = await client.callTool({ name: 'quiz_solve', arguments: {} });
+const solved = JSON.parse(String(solve.content?.[0]?.text || '{}'));
+console.log('quiz_solve: ', solved.code || `ok=${solved.ok}`);
+
 await client.callTool({ name: 'quiz_close', arguments: {} });
 await client.close();
 
-const ok = tools.length === 9 && parsed.count === 4;
+const ok = tools.length === 10 && parsed.count === 4 && solved.code === 'solver-disabled';
 console.log(ok ? '\nMCP TEST PASS' : '\nMCP TEST FAIL');
 process.exit(ok ? 0 : 1);

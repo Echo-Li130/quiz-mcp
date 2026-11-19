@@ -5,7 +5,7 @@ import { loadConfig } from '../src/core/config.mjs';
 import { registerTools } from '../src/tools.mjs';
 
 const cfg = loadConfig();
-const server = new McpServer({ name: 'quiz-mcp', version: '0.1.0' });
+const server = new McpServer({ name: 'quiz-mcp', version: '0.2.0' });
 registerTools(server, cfg);
 
 await server.connect(new StdioServerTransport());

@@ -28,6 +28,52 @@ export const DEFAULT_SELECTORS = {
   promptRoot: '.el-message-box, .el-dialog__wrapper',
 };
 
+/**
+ * 求解器（quiz_solve）的默认值。
+ *
+ * mode 默认 off —— 不启用时 quiz_solve 只回 solver-disabled，其余工具行为一字不变。
+ * web  = 网页版 DeepSeek（复用同一个浏览器，登录态留在 .profiles/，题目不出本机进程）
+ * api  = DeepSeek 兼容接口（按 token 计费，最稳）
+ */
+export const DEFAULT_SOLVER = {
+  mode: 'off',
+  batchSize: 8,
+  timeoutMs: 120000,
+  cacheFile: 'adapter/answer-cache.json',
+  web: {
+    url: 'https://chat.deepseek.com/',
+    selectors: {
+      input: 'textarea',
+      send: 'button[type=submit]',
+      reply: '[class*=markdown]',
+      loginHint: '登录|Log in|Sign in|扫码登录|手机号',
+    },
+  },
+  api: {
+    baseUrl: 'https://api.deepseek.com',
+    model: 'deepseek-chat',
+    keyEnv: 'DEEPSEEK_API_KEY',
+  },
+};
+
+function mergeSolver(...parts) {
+  const out = {
+    ...DEFAULT_SOLVER,
+    web: { ...DEFAULT_SOLVER.web, selectors: { ...DEFAULT_SOLVER.web.selectors } },
+    api: { ...DEFAULT_SOLVER.api },
+  };
+  for (const part of parts) {
+    if (!part || typeof part !== 'object') continue;
+    const { web, api, ...rest } = part;
+    Object.assign(out, rest);
+    if (web) {
+      out.web = { ...out.web, ...web, selectors: { ...out.web.selectors, ...(web.selectors || {}) } };
+    }
+    if (api) out.api = { ...out.api, ...api };
+  }
+  return out;
+}
+
 const CONFIG_CANDIDATES = ['adapter/config.json', 'config.json'];
 
 function readJson(file) {
@@ -72,7 +118,14 @@ export function loadConfig(overrides = {}) {
       ...(local.behavior || {}),
       ...(overrides.behavior || {}),
     },
+    solver: mergeSolver(local.solver, overrides.solver),
   };
+}
+
+/** 缓存文件的绝对路径：配置里写相对路径时按仓库根解析，不依赖进程 cwd。 */
+export function cacheFilePath(cfg) {
+  const rel = cfg?.solver?.cacheFile || DEFAULT_SOLVER.cacheFile;
+  return path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
 }
 
 const BROWSERS = [

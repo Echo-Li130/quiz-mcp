@@ -111,9 +111,10 @@ node bin/quiz-cli.mjs redo
 | `quiz_status` | 当前地址、试卷标题、答题进度、是否在登录页 |
 | `quiz_probe` | 输出页面结构摘要，帮你写 adapter 选择器 |
 | `quiz_collect` | 采集当前试卷全部题目 |
+| `quiz_solve` | **低 token**：内部采集+求解，只回紧凑答案键；`apply:true` 才回填 |
 | `quiz_answer` | 按题号作答，**默认 dryRun，不点击页面** |
 | `quiz_submit` | 提交并返回掌握度，**必须 confirm:true** |
-| `quiz_analysis` | 打开解析页，返回错题与参考答案 |
+| `quiz_analysis` | 打开解析页，返回错题与参考答案（默认只回错题，`detail:true` 回全文） |
 | `quiz_redo` | 点「重新答题」开新一轮 |
 | `quiz_close` | 关闭浏览器、释放 profile |
 
@@ -124,6 +125,43 @@ quiz_open → quiz_collect → quiz_answer(dryRun) → quiz_answer → quiz_subm
   ├─ 掌握度 ≥ 阈值 → 结束
   └─ 否则 → quiz_analysis → quiz_redo → 再 collect
 ```
+
+低 token 编排（推荐，题目不进上下文）：
+
+```
+quiz_open → quiz_solve(apply) → quiz_submit
+  └─ 需要复盘 → quiz_analysis → quiz_redo → quiz_solve
+```
+
+---
+
+## 低 token 模式（quiz_solve）
+
+原来的流程要把整卷题目读进 agent 上下文、再逐题推理；`quiz_solve` 把「求解」留在 MCP 里，
+只返回一行答案键，**题目内容不进入对话**。
+
+开启方式（`adapter/config.json`）：
+
+```json
+"solver": {
+  "mode": "web",              // off（默认）| web | api
+  "batchSize": 8,
+  "cacheFile": "adapter/answer-cache.json"
+}
+```
+
+- **web**：复用同一个浏览器，新开一个 `chat.deepseek.com` 标签页；首次需要在那窗口里登录一次，
+  登录态留在 `.profiles/`。选择器可在 `solver.web.selectors` 里改。
+- **api**：走 DeepSeek 兼容接口，key 取 `solver.api.keyEnv` 指向的环境变量（默认 `DEEPSEEK_API_KEY`）。
+- **缓存**：答案按「题干+选项」哈希存 `adapter/answer-cache.json`，重做同一套卷子不再重复求解；
+  `refresh: true` 强制重算。
+- **从解析页学习**：`quiz-cli analysis --learn` 会把错题的标准答案写回缓存，下一轮直接命中。
+- **安全默认**：`apply` 默认 false，只回答案键；确认后再 `apply: true` 回填；提交仍需 `confirm`。
+
+实测（6 题卷）：`quiz_collect` 全量 4091 字节 → `quiz_solve` 答案键 60 字符。
+
+> 隐私提示：web 模式会把题干发送到 `chat.deepseek.com`（你自己的账号）。默认 `off`，
+> 只在你明确开启后才会发送。
 
 ---
 
@@ -138,8 +176,11 @@ quiz_open → quiz_collect → quiz_answer(dryRun) → quiz_answer → quiz_subm
 两个测试都完全离线，使用内置 `test/fixture.html`，不访问任何外部网站、不需要登录：
 
 ```bash
-node test/selftest.mjs        # 引擎：采集 4 题 → 作答 → 提交，期望 SELFTEST PASS 4/4
-node test/mcp-client-test.mjs # MCP 协议：真客户端连真 server，期望 MCP TEST PASS
+node test/selftest.mjs          # 引擎：采集 4 题 → 作答 → 提交，期望 SELFTEST PASS 4/4
+node test/mcp-client-test.mjs   # MCP 协议：真客户端连真 server，期望 MCP TEST PASS
+node test/solver-parse.test.mjs # 求解器：提示词/解析/校验
+node test/solver-cache.test.mjs # 求解器：答案缓存
+node test/solve-fixture.test.mjs# 求解器：编排（假 provider，不联网）
 ```
 
 每次 push 到 `main` 或提交 PR，GitHub Actions 都会在 Linux 上自动跑这两项（见

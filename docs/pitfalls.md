@@ -53,3 +53,18 @@ await page.keyboard.press('ArrowRight');   // 关键：一次真实按键触发�
 ## 8. 遇到验证码/滑块就停
 
 自动化无法可靠通过，检测到相关文案应停止并把控制权交回人类；强行重试只会触发风控。
+
+## 9. 网页版 DeepSeek 需要单独登录一次
+
+`solver.mode = "web"` 时，插件会在同一个浏览器里新开 `chat.deepseek.com` 标签页。
+这个 profile 和你日常浏览器不共享登录态：
+
+- 首次会返回 `login-required`，去那个窗口手动登录即可，登录态留在 `.profiles/`；
+- 页面改版时更新 `solver.web.selectors`（输入框/回复区/登录提示文案）；
+- 回复要等「连续 2 秒不再变化」才算完成，流式输出中途取值会拿到半截答案。
+
+## 10. 题目多时要分批
+
+一次把几十道题塞给网页版，容易被截断或触发限流。默认 `solver.batchSize = 8`，
+十几题以上建议保持或调小；求解结果会进 `adapter/answer-cache.json`，重做同一套卷子不会重复请求。
+

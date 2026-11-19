@@ -31,5 +31,25 @@
     "waitAfterClickMs": 220,
     "waitAfterNextMs": 600,
     "navigationTimeoutMs": 60000
+  },
+  "solver": {
+    "mode": "off",
+    "batchSize": 8,
+    "timeoutMs": 120000,
+    "cacheFile": "adapter/answer-cache.json",
+    "web": {
+      "url": "https://chat.deepseek.com/",
+      "selectors": {
+        "input": "textarea",
+        "send": "button[type=submit]",
+        "reply": "[class*=markdown]",
+        "loginHint": "登录|Log in|Sign in|扫码登录|手机号"
+      }
+    },
+    "api": {
+      "baseUrl": "https://api.deepseek.com",
+      "model": "deepseek-chat",
+      "keyEnv": "DEEPSEEK_API_KEY"
+    }
   }
 }

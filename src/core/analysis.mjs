@@ -1,10 +1,11 @@
 const clean = (s) => (s || '').replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
 
 /**
- * 打开「查看作答记录与解析」页，返回原文与逐题解析。
+ * 打开「查看作答记录与解析」页，返回错题与参考答案。
+ * 默认只回错题条目（省 token）；detail=true 才附带整页原文。
  * 解析页可能在新标签打开，这里按“最后出现的新页面”处理。
  */
-export async function openAnalysis(page, sel, behavior) {
+export async function openAnalysis(page, sel, behavior, { detail = false } = {}) {
   const before = new Set(page.context().pages().map((p) => p.url()));
 
   const link = page.locator('span, div, a, button').filter({ hasText: new RegExp(`^\\s*${sel.analysisText}\\s*$`) }).first();
@@ -29,5 +30,10 @@ export async function openAnalysis(page, sel, behavior) {
     items.push({ stem: stem.slice(0, 160), correctAnswer: correct.slice(0, 120), wrong });
   }
 
-  return { ok: true, url: target.url(), text: text.slice(0, 4000), items };
+  return {
+    ok: true,
+    url: target.url(),
+    items: detail ? items : items.filter((item) => item.wrong),
+    ...(detail ? { text: text.slice(0, 4000) } : {}),
+  };
 }

@@ -6,10 +6,25 @@ import { collectQuestions, readQuestion, readStatus } from './core/extract.mjs';
 import { probePage } from './core/probe.mjs';
 import { clickRedo } from './core/redo.mjs';
 import { submitPaper } from './core/submit.mjs';
+import { solveQuestions } from './core/solver/index.mjs';
 
+// 紧凑序列化：工具结果是给模型读的，两空格缩进纯属浪费 token。
 const json = (value) => ({
-  content: [{ type: 'text', text: JSON.stringify(value, null, 2) }],
+  content: [{ type: 'text', text: JSON.stringify(value) }],
 });
+
+/** 进程内缓存上一次采集结果，避免 quiz_answer/quiz_solve 重复翻页。 */
+const COLLECT_TTL_MS = 5 * 60 * 1000;
+const recent = { at: 0, questions: [] };
+
+function rememberQuestions(questions) {
+  recent.at = Date.now();
+  recent.questions = questions;
+}
+
+function freshQuestions() {
+  return Date.now() - recent.at < COLLECT_TTL_MS ? recent.questions : [];
+}
 
 const fail = (error) => json({ ok: false, error: String(error && error.message ? error.message : error) });
 
@@ -80,7 +95,17 @@ export function registerTools(server, cfg) {
       try {
         const page = await session().ensure();
         const questions = await collectQuestions(page, cfg.selectors, { max: max || 15 });
-        return json({ ok: true, count: questions.length, questions });
+        // 题号统一成 1 起（与 quiz_answer 的 index 一致），并省略空字段省 token。
+        const compact = questions.map((q, i) => ({
+          index: i + 1,
+          kind: q.kind,
+          stem: q.stem,
+          ...(q.type ? { type: q.type } : {}),
+          ...(Array.isArray(q.options) && q.options.length ? { options: q.options } : {}),
+          ...(q.blanks ? { blanks: q.blanks } : {}),
+        }));
+        rememberQuestions(compact);
+        return json({ ok: true, count: compact.length, questions: compact });
       } catch (e) {
         return fail(e);
       }
@@ -115,6 +140,71 @@ export function registerTools(server, cfg) {
   );
 
   server.registerTool(
+    'quiz_solve',
+    {
+      title: 'Solve paper (low token)',
+      description: '低 token 模式：内部采集题目并交给求解器（网页版 DeepSeek / API），只返回紧凑答案键，题目内容不进入对话上下文。默认只回显，apply=true 才真正回填。',
+      inputSchema: {
+        max: z.number().int().min(1).max(50).optional().describe('最多处理多少题，默认 15'),
+        mode: z.enum(['web', 'api']).optional().describe('覆盖 solver.mode：web=网页版 DeepSeek，api=DeepSeek 接口'),
+        apply: z.boolean().optional().describe('默认 false 只回答案键；true 才真正点选/填写'),
+        batchSize: z.number().int().min(1).max(20).optional().describe('每次发给求解器的题数，默认取配置'),
+        refresh: z.boolean().optional().describe('忽略缓存重新求解'),
+      },
+    },
+    async ({ max, mode, apply, batchSize, refresh }) => {
+      try {
+        if (cfg.solver.mode === 'off' && !mode) {
+          return json({
+            ok: false,
+            code: 'solver-disabled',
+            message: '先在 adapter/config.json 里把 solver.mode 设为 "web" 或 "api"',
+          });
+        }
+
+        const page = await session().ensure();
+        let questions = max ? freshQuestions().slice(0, max) : freshQuestions();
+        if (!questions.length) {
+          questions = (await collectQuestions(page, cfg.selectors, { max: max || 15 }))
+            .map((q, i) => ({ ...q, index: i + 1 }));
+          rememberQuestions(questions);
+        }
+
+        const result = await solveQuestions({
+          session: session(),
+          cfg,
+          questions,
+          mode,
+          batchSize,
+          refresh: refresh === true,
+        });
+
+        let applied = null;
+        if (apply === true && result.answers.length) {
+          applied = await applyAnswers(page, result.answers, cfg.selectors, cfg.behavior, { dryRun: false });
+        }
+
+        return json({
+          ok: true,
+          mode: result.mode,
+          total: questions.length,
+          resolved: result.answers.length,
+          cached: result.cached,
+          key: result.key,
+          unresolved: result.unresolved,
+          ...(applied ? { applied: applied.map((a) => ({ index: a.index, verified: a.verified })) } : {}),
+        });
+      } catch (e) {
+        return json({
+          ok: false,
+          ...(e && e.code ? { code: e.code } : {}),
+          error: String(e && e.message ? e.message : e),
+        });
+      }
+    },
+  );
+
+  server.registerTool(
     'quiz_submit',
     {
       title: 'Submit paper',
@@ -135,13 +225,15 @@ export function registerTools(server, cfg) {
     'quiz_analysis',
     {
       title: 'Read answer analysis',
-      description: '打开「查看作答记录与解析」，返回错题与参考答案，供下一轮修正。',
-      inputSchema: {},
+      description: '打开「查看作答记录与解析」，返回错题与参考答案，供下一轮修正。默认只回错题条目，detail=true 才回原始文本。',
+      inputSchema: {
+        detail: z.boolean().optional().describe('是否附带整页解析原文（默认 false，省 token）'),
+      },
     },
-    async () => {
+    async ({ detail }) => {
       try {
         const page = await session().ensure();
-        return json(await openAnalysis(page, cfg.selectors, cfg.behavior));
+        return json(await openAnalysis(page, cfg.selectors, cfg.behavior, { detail: detail === true }));
       } catch (e) {
         return fail(e);
       }

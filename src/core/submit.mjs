@@ -1,18 +1,30 @@
 const clean = (s) => (s || '').replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
 
+async function safeText(page) {
+  try {
+    return (await page.evaluate(() => (document.body && document.body.innerText) || '')).toString();
+  } catch {
+    return '';
+  }
+}
+
 async function visiblePrompts(page, sel) {
-  return page.evaluate((s) => {
-    const clean = (x) => (x || '').replace(/\s+/g, ' ').trim();
-    const out = [];
-    document.querySelectorAll(s.promptRoot).forEach((box) => {
-      if (getComputedStyle(box).display === 'none') return;
-      out.push({
-        text: clean(box.innerText).slice(0, 200),
-        buttons: [...box.querySelectorAll('button')].map((b) => clean(b.innerText)).filter(Boolean),
+  try {
+    return await page.evaluate((s) => {
+      const clean = (x) => (x || '').replace(/\s+/g, ' ').trim();
+      const out = [];
+      document.querySelectorAll(s.promptRoot).forEach((box) => {
+        if (getComputedStyle(box).display === 'none') return;
+        out.push({
+          text: clean(box.innerText).slice(0, 200),
+          buttons: [...box.querySelectorAll('button')].map((b) => clean(b.innerText)).filter(Boolean),
+        });
       });
-    });
-    return out;
-  }, sel);
+      return out;
+    }, sel);
+  } catch {
+    return [];
+  }
 }
 
 export function parseMastery(text) {
@@ -59,6 +71,8 @@ export async function submitPaper(page, sel, behavior, { confirm = false } = {})
   if (!(await btn.count())) return { ok: false, error: '当前页面找不到提交按钮' };
 
   await btn.click({ timeout: 8000 }).catch(() => {});
+  // 提交常伴随页面跳转：先等导航落定，再去读弹窗/结果，避免上下文被销毁。
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
   await page.waitForTimeout(1500);
 
   const prompts = await visiblePrompts(page, sel);
@@ -77,9 +91,7 @@ export async function submitPaper(page, sel, behavior, { confirm = false } = {})
 
   await page.waitForTimeout(5000);
   const resultPage = await findResultPage(page);
-  const text = resultPage
-    ? await resultPage.evaluate(() => (document.body && document.body.innerText) || '').catch(() => '')
-    : await page.evaluate(() => (document.body && document.body.innerText) || '').catch(() => '');
+  const text = resultPage ? await safeText(resultPage) : await safeText(page);
 
   return {
     ok: true,

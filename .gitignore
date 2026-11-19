@@ -15,6 +15,9 @@ config.json
 # 运行时产物：题目、答案、结果、截图
 questions*.json
 answers*.json
+answer-cache*.json
+adapter/last-questions.json
+adapter/corrections.json
 *-result-*.json
 snap*.json
 *.png

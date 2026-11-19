@@ -16,6 +16,7 @@ import { clickRedo } from '../src/core/redo.mjs';
 import { submitPaper } from '../src/core/submit.mjs';
 import { solveQuestions } from '../src/core/solver/index.mjs';
 import { learnCorrections } from '../src/core/solver/learn.mjs';
+import { clearQuestions } from '../src/core/solver/cache.mjs';
 
 const LAST_QUESTIONS = path.join(ROOT, 'adapter', 'last-questions.json');
 
@@ -60,6 +61,43 @@ async function main() {
     case 'tabs': {
       await session.ensure();
       return out({ ok: true, tabs: session.context.pages().map((p) => p.url()) });
+    }
+    case 'rects': {
+      const page = await session.ensure();
+      const data = await page.evaluate(() => ({
+        viewport: { w: window.innerWidth, h: window.innerHeight, dpr: window.devicePixelRatio },
+        canvases: [...document.querySelectorAll('canvas')].map((c) => {
+          const r = c.getBoundingClientRect();
+          return { x: r.x, y: r.y, w: r.width, h: r.height };
+        }),
+      }));
+      return out({ ok: true, ...data });
+    }
+    case 'click': {
+      const page = await session.ensure();
+      const x = Number(value('x', '0'));
+      const y = Number(value('y', '0'));
+      await page.mouse.click(x, y);
+      await page.waitForTimeout(1500);
+      return out({ ok: true, x, y, url: page.url() });
+    }
+    case 'clicktext': {
+      const page = await session.ensure();
+      const text = value('text', '');
+      const loc = page.getByText(text, { exact: true }).first();
+      if (await loc.count()) {
+        await loc.click({ timeout: 8000 }).catch(() => {});
+      } else {
+        await page.locator('span,div,a,button').filter({ hasText: text }).first().click({ timeout: 8000 }).catch(() => {});
+      }
+      await page.waitForTimeout(1500);
+      return out({ ok: true, text, url: page.url() });
+    }
+    case 'back': {
+      const page = await session.ensure();
+      await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.waitForTimeout(1500);
+      return out({ ok: true, url: page.url() });
     }
     case 'shot': {
       const page = await session.ensure();
@@ -126,11 +164,27 @@ async function main() {
     case 'submit': {
       if (!flag('confirm')) return out({ ok: false, error: '需要 --confirm 才会真正提交' });
       const page = await session.ensure();
-      return out(await submitPaper(page, cfg.selectors, cfg.behavior, { confirm: true }));
+      const result = await submitPaper(page, cfg.selectors, cfg.behavior, { confirm: true });
+      let cleared = null;
+      const threshold = Number(value('threshold', '90'));
+      if (flag('clear-on-pass') && result.ok && typeof result.mastery === 'number') {
+        if (result.mastery >= threshold) {
+          try {
+            const saved = JSON.parse(fs.readFileSync(LAST_QUESTIONS, 'utf8'));
+            cleared = clearQuestions(cfg, saved.questions || []);
+          } catch {
+            cleared = 0;
+          }
+        }
+      }
+      return out(flag('clear-on-pass') ? { ...result, threshold, cleared } : result);
     }
     case 'analysis': {
       const page = await session.ensure();
-      const result = await openAnalysis(page, cfg.selectors, cfg.behavior, { detail: flag('detail') });
+      const result = await openAnalysis(page, cfg.selectors, cfg.behavior, {
+        detail: flag('detail'),
+        all: flag('all'),
+      });
       if (!flag('learn')) return out(result);
       let learned = 0;
       try {
@@ -142,6 +196,19 @@ async function main() {
       return out({ ...result, learned });
     }
     case 'learn': {
+      if (flag('all')) {
+        const page = await session.ensure();
+        const result = await openAnalysis(page, cfg.selectors, cfg.behavior, { all: true });
+        if (!result.ok) return out(result);
+        let saved;
+        try {
+          saved = JSON.parse(fs.readFileSync(LAST_QUESTIONS, 'utf8'));
+        } catch {
+          return out({ ok: false, error: '还没有采集记录，先跑一次 solve' });
+        }
+        const learned = learnCorrections(cfg, result.items, saved.questions || []);
+        return out({ ok: true, learned, total: (saved.questions || []).length, scanned: result.items.length });
+      }
       const file = value('file', 'adapter/corrections.json');
       const full = path.isAbsolute(file) ? file : path.join(ROOT, file);
       if (!fs.existsSync(full)) return out({ ok: false, error: `找不到纠正文件 ${file}` });
@@ -151,6 +218,17 @@ async function main() {
       const saved = JSON.parse(fs.readFileSync(LAST_QUESTIONS, 'utf8'));
       const learned = learnCorrections(cfg, items, saved.questions || []);
       return out({ ok: true, learned, total: (saved.questions || []).length });
+    }
+    case 'cache': {
+      if (argv[1] !== 'clear') return out({ ok: false, error: '用法: quiz-cli cache clear --paper' });
+      let saved;
+      try {
+        saved = JSON.parse(fs.readFileSync(LAST_QUESTIONS, 'utf8'));
+      } catch {
+        return out({ ok: false, error: '还没有采集记录，先跑一次 solve' });
+      }
+      const removed = clearQuestions(cfg, saved.questions || []);
+      return out({ ok: true, removed, total: (saved.questions || []).length });
     }
     case 'redo': {
       const page = await session.ensure();
@@ -165,7 +243,7 @@ async function main() {
       return out({
         ok: false,
         error: '未知命令',
-        usage: 'quiz-cli <open|status|probe|tabs|focus|shot|collect|solve|learn|answer|submit|analysis|redo|close> [--url X] [--max N] [--out f] [--mode web|api] [--batch N] [--refresh] [--commit] [--confirm] [--learn] [--file f] [--detail]',
+        usage: 'quiz-cli <open|status|probe|tabs|focus|shot|rects|click|clicktext|back|collect|solve|learn|cache|answer|submit|analysis|redo|close> [--url X] [--max N] [--out f] [--mode web|api] [--batch N] [--refresh] [--commit] [--confirm] [--learn] [--all] [--file f] [--detail] [--clear-on-pass] [--threshold N]',
       });
   }
 }

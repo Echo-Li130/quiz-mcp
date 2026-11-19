@@ -7,6 +7,7 @@ import { probePage } from './core/probe.mjs';
 import { clickRedo } from './core/redo.mjs';
 import { submitPaper } from './core/submit.mjs';
 import { solveQuestions } from './core/solver/index.mjs';
+import { clearQuestions } from './core/solver/cache.mjs';
 
 // 紧凑序列化：工具结果是给模型读的，两空格缩进纯属浪费 token。
 const json = (value) => ({
@@ -209,12 +210,23 @@ export function registerTools(server, cfg) {
     {
       title: 'Submit paper',
       description: '提交试卷并返回掌握度。必须显式 confirm=true 才会真正提交。',
-      inputSchema: { confirm: z.boolean().optional().describe('必须为 true 才提交') },
+      inputSchema: {
+        confirm: z.boolean().optional().describe('必须为 true 才提交'),
+        clearCacheOnPass: z.boolean().optional().describe('掌握度达阈值后清掉本轮题目的答案缓存'),
+        threshold: z.number().min(0).max(100).optional().describe('达标阈值，默认 90'),
+      },
     },
-    async ({ confirm }) => {
+    async ({ confirm, clearCacheOnPass, threshold }) => {
       try {
         const page = await session().ensure();
-        return json(await submitPaper(page, cfg.selectors, cfg.behavior, { confirm: confirm === true }));
+        const result = await submitPaper(page, cfg.selectors, cfg.behavior, { confirm: confirm === true });
+        let cleared = null;
+        if (clearCacheOnPass === true && result.ok && typeof result.mastery === 'number') {
+          if (result.mastery >= (threshold ?? 90)) {
+            cleared = clearQuestions(cfg, freshQuestions());
+          }
+        }
+        return json(cleared === null ? result : { ...result, cleared });
       } catch (e) {
         return fail(e);
       }
@@ -228,12 +240,16 @@ export function registerTools(server, cfg) {
       description: '打开「查看作答记录与解析」，返回错题与参考答案，供下一轮修正。默认只回错题条目，detail=true 才回原始文本。',
       inputSchema: {
         detail: z.boolean().optional().describe('是否附带整页解析原文（默认 false，省 token）'),
+        all: z.boolean().optional().describe('返回全部题目（含答对的），默认只回错题'),
       },
     },
-    async ({ detail }) => {
+    async ({ detail, all }) => {
       try {
         const page = await session().ensure();
-        return json(await openAnalysis(page, cfg.selectors, cfg.behavior, { detail: detail === true }));
+        return json(await openAnalysis(page, cfg.selectors, cfg.behavior, {
+          detail: detail === true,
+          all: all === true,
+        }));
       } catch (e) {
         return fail(e);
       }

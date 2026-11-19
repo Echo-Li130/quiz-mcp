@@ -10,6 +10,9 @@
   支持分批、答案缓存、解析失败自动重试一次。
 - **`quiz-cli` 新命令**：`solve`、`learn`、`tabs`、`focus`、`shot`。
 - **`quiz-cli analysis --learn`**：把解析页里的标准答案写回缓存，重做时直接命中。
+- **`quiz-cli learn --all`**：解析页整卷入库（含答对的题），重做同一套卷子可全量命中。
+- **达标清缓存**：`quiz-cli submit --clear-on-pass --threshold 90` 在掌握度达标后清掉本轮题目缓存；
+  也可 `quiz-cli cache clear --paper` 单独清理。
 
 ### 变更
 

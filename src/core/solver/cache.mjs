@@ -52,6 +52,25 @@ function trim(cache) {
   return entries.sort((a, b) => (b[1].at || 0) - (a[1].at || 0)).slice(0, MAX_ENTRIES);
 }
 
+/** 删掉一道题的缓存；返回是否删到了。 */
+export function removeCached(cache, question) {
+  const key = questionKey(question);
+  if (!cache.entries[key]) return false;
+  delete cache.entries[key];
+  return true;
+}
+
+/** 清掉一整卷（按本轮采集的题目）的缓存，达标后用来止损。 */
+export function clearQuestions(cfg, questions) {
+  const cache = loadCache(cfg);
+  let removed = 0;
+  for (const question of questions) {
+    if (removeCached(cache, question)) removed += 1;
+  }
+  saveCache(cache);
+  return removed;
+}
+
 export function saveCache(cache) {
   if (!cache.file) return 0;
   const kept = Object.fromEntries(trim(cache));

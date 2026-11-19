@@ -155,7 +155,10 @@ quiz_open → quiz_solve(apply) → quiz_submit
 - **api**：走 DeepSeek 兼容接口，key 取 `solver.api.keyEnv` 指向的环境变量（默认 `DEEPSEEK_API_KEY`）。
 - **缓存**：答案按「题干+选项」哈希存 `adapter/answer-cache.json`，重做同一套卷子不再重复求解；
   `refresh: true` 强制重算。
-- **从解析页学习**：`quiz-cli analysis --learn` 会把错题的标准答案写回缓存，下一轮直接命中。
+- **从解析页学习**：`quiz-cli analysis --learn` 只学错题；`quiz-cli learn --all` 会把解析页上
+  **全部题目**的标准答案写回缓存（整卷入库，下一轮重做可 100% 命中）。
+- **达标后清缓存**：`quiz-cli submit --confirm --clear-on-pass --threshold 90` 在掌握度达标后
+  自动清掉本轮题目的缓存；也可单独执行 `quiz-cli cache clear --paper`。
 - **安全默认**：`apply` 默认 false，只回答案键；确认后再 `apply: true` 回填；提交仍需 `confirm`。
 
 实测（6 题卷）：`quiz_collect` 全量 4091 字节 → `quiz_solve` 答案键 60 字符。

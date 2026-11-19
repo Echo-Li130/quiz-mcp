@@ -5,19 +5,26 @@ const clean = (s) => (s || '').replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim
  * 默认只回错题条目（省 token）；detail=true 才附带整页原文。
  * 解析页可能在新标签打开，这里按“最后出现的新页面”处理。
  */
-export async function openAnalysis(page, sel, behavior, { detail = false } = {}) {
-  const before = new Set(page.context().pages().map((p) => p.url()));
+export async function openAnalysis(page, sel, behavior, { detail = false, all = false } = {}) {
+  let target = page;
+  const alreadyPreview = /examPreview|analysis/i.test(page.url());
 
-  const link = page.locator('span, div, a, button').filter({ hasText: new RegExp(`^\\s*${sel.analysisText}\\s*$`) }).first();
-  if (!(await link.count())) {
-    return { ok: false, error: `找不到「${sel.analysisText}」入口` };
+  if (!alreadyPreview) {
+    const before = new Set(page.context().pages().map((p) => p.url()));
+
+    const link = page.locator('span, div, a, button').filter({ hasText: new RegExp(`^\\s*${sel.analysisText}\\s*$`) }).first();
+    if (!(await link.count())) {
+      return { ok: false, error: `找不到「${sel.analysisText}」入口` };
+    }
+    await link.click({ timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(4000);
+
+    const pages = page.context().pages().filter((p) => !p.isClosed());
+    target = pages.find((p) => !before.has(p.url()) && /examPreview|analysis|解析/i.test(p.url()));
+    if (!target) target = pages[pages.length - 1];
+  } else {
+    await page.waitForTimeout(500);
   }
-  await link.click({ timeout: 8000 }).catch(() => {});
-  await page.waitForTimeout(4000);
-
-  const pages = page.context().pages().filter((p) => !p.isClosed());
-  let target = pages.find((p) => !before.has(p.url()) && /examPreview|analysis|解析/i.test(p.url()));
-  if (!target) target = pages[pages.length - 1];
 
   const text = clean(await target.evaluate(() => (document.body && document.body.innerText) || ''));
   const frags = text.split(/收藏为薄弱题|AI答题辅导/);
@@ -33,7 +40,7 @@ export async function openAnalysis(page, sel, behavior, { detail = false } = {})
   return {
     ok: true,
     url: target.url(),
-    items: detail ? items : items.filter((item) => item.wrong),
+    items: all || detail ? items : items.filter((item) => item.wrong),
     ...(detail ? { text: text.slice(0, 4000) } : {}),
   };
 }

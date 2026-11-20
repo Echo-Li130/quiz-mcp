@@ -167,6 +167,35 @@ quiz_open → quiz_solve(apply) → quiz_submit
   自动清掉本轮题目的缓存；也可单独执行 `quiz-cli cache clear --paper`。
 - **安全默认**：`apply` 默认 false，只回答案键；确认后再 `apply: true` 回填；提交仍需 `confirm`。
 
+### 会话复用与限速（0.3.0）
+
+网页版 DeepSeek 从首页发问会新建一个对话。旧版每次求解都新开标签页、回首页，批量答题时很快就能堆出几十个对话，容易触发平台风控。
+
+现在默认**复用同一个对话**：
+
+- 一个进程内只保留一个求解标签页；发送后记录会话地址（`/a/chat/s/...`），下次优先续用；
+- 进程重启后按记录文件续用同一会话；标签被手动关掉也会按记录的地址重新打开，而不是回首页；
+- 两次提问之间至少间隔 `minIntervalMs`；单个对话提问数达到 `maxPromptsPerThread` 或超龄（`threadMaxAgeMs`）才轮换，轮换前先冷却 `rotateCooldownMs`。
+
+```json
+"solver": {
+  "mode": "web",
+  "web": {
+    "keepThread": true,
+    "minIntervalMs": 15000,
+    "maxPromptsPerThread": 40,
+    "threadMaxAgeMs": 43200000,
+    "rotateCooldownMs": 300000,
+    "threadFile": "adapter/solver-thread.json"
+  }
+}
+```
+
+- 想临时开一个新对话：`quiz_solve` 传 `newThread: true`，或 `quiz-cli solve --new-thread`；
+- 想完全关掉复用、恢复旧行为：`"keepThread": false`；
+- `quiz_solve` 的返回里带 `thread: { reused, prompts }`，可以确认这次是续用还是新会话；
+- **大批量刷题建议用 `"mode": "api"`**：不经过网页版，完全不产生对话，也不受网页版限流影响。
+
 实测（6 题卷）：`quiz_collect` 全量 4091 字节 → `quiz_solve` 答案键 60 字符。
 
 > 隐私提示：web 模式会把题干发送到 `chat.deepseek.com`（你自己的账号）。默认 `off`，
@@ -190,6 +219,8 @@ node test/mcp-client-test.mjs   # MCP 协议：真客户端连真 server，期�
 node test/solver-parse.test.mjs # 求解器：提示词/解析/校验
 node test/solver-cache.test.mjs # 求解器：答案缓存
 node test/solve-fixture.test.mjs# 求解器：编排（假 provider，不联网）
+node test/solver-thread.test.mjs# 求解器：会话复用/续用/轮换/串行
+node test/solver-pacing.test.mjs# 求解器：提问间隔与冷却
 ```
 
 每次 push 到 `main` 或提交 PR，GitHub Actions 都会在 Linux 上自动跑这两项（见

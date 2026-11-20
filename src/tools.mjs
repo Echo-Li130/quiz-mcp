@@ -8,6 +8,7 @@ import { clickRedo } from './core/redo.mjs';
 import { submitPaper } from './core/submit.mjs';
 import { solveQuestions } from './core/solver/index.mjs';
 import { clearQuestions } from './core/solver/cache.mjs';
+import { resetThread } from './core/solver/thread.mjs';
 
 // 紧凑序列化：工具结果是给模型读的，两空格缩进纯属浪费 token。
 const json = (value) => ({
@@ -144,16 +145,17 @@ export function registerTools(server, cfg) {
     'quiz_solve',
     {
       title: 'Solve paper (low token)',
-      description: '低 token 模式：内部采集题目并交给求解器（网页版 DeepSeek / API），只返回紧凑答案键，题目内容不进入对话上下文。默认只回显，apply=true 才真正回填。',
+      description: '低 token 模式：内部采集题目并交给求解器（网页版 DeepSeek / API），只返回紧凑答案键，题目内容不进入对话上下文。默认只回显，apply=true 才真正回填。网页版默认复用同一个对话并限速，避免频繁新建对话触发风控。',
       inputSchema: {
         max: z.number().int().min(1).max(50).optional().describe('最多处理多少题，默认 15'),
         mode: z.enum(['web', 'api']).optional().describe('覆盖 solver.mode：web=网页版 DeepSeek，api=DeepSeek 接口'),
         apply: z.boolean().optional().describe('默认 false 只回答案键；true 才真正点选/填写'),
         batchSize: z.number().int().min(1).max(20).optional().describe('每次发给求解器的题数，默认取配置'),
         refresh: z.boolean().optional().describe('忽略缓存重新求解'),
+        newThread: z.boolean().optional().describe('网页版强制作答前开一个新对话（默认复用当前对话）'),
       },
     },
-    async ({ max, mode, apply, batchSize, refresh }) => {
+    async ({ max, mode, apply, batchSize, refresh, newThread }) => {
       try {
         if (cfg.solver.mode === 'off' && !mode) {
           return json({
@@ -178,6 +180,7 @@ export function registerTools(server, cfg) {
           mode,
           batchSize,
           refresh: refresh === true,
+          newThread: newThread === true,
         });
 
         let applied = null;
@@ -193,6 +196,7 @@ export function registerTools(server, cfg) {
           cached: result.cached,
           key: result.key,
           unresolved: result.unresolved,
+          ...(result.thread ? { thread: result.thread } : {}),
           ...(applied ? { applied: applied.map((a) => ({ index: a.index, verified: a.verified })) } : {}),
         });
       } catch (e) {
@@ -280,7 +284,11 @@ export function registerTools(server, cfg) {
       description: '关闭本进程打开的浏览器并释放 profile。',
       inputSchema: {},
     },
-    async () => json({ ok: true, closed: await closeSession() }),
+    async () => {
+      const s = session();
+      await resetThread(s, cfg, { close: true }).catch(() => {});
+      return json({ ok: true, closed: await closeSession() });
+    },
   );
 
   return server;

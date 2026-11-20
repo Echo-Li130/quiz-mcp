@@ -7,6 +7,7 @@ import { parseAnswerText, jsonAnswersToText, renderKey } from './parse.mjs';
 import { solveViaApi } from './api.mjs';
 import { openSolverPage, solveViaWeb } from './web.mjs';
 import { loadCache, getCached, putCached, saveCache } from './cache.mjs';
+import { rotateIfNeeded, resetThread, threadState, withThreadLock } from './thread.mjs';
 
 const chunk = (items, size) => {
   const out = [];
@@ -30,6 +31,7 @@ export async function solveQuestions({
   mode,
   batchSize,
   refresh = false,
+  newThread = false,
   provider = null,
 }) {
   const selected = mode || cfg.solver.mode;
@@ -48,11 +50,22 @@ export async function solveQuestions({
     || (selected === 'api' ? (qs) => solveViaApi(qs, cfg) : null);
   let webPage = null;
   let keepOpen = false;
+  let reusedThread = false;
 
-  const call = async (qs) => {
+  if (selected !== 'api' && newThread && session) {
+    await resetThread(session, cfg);
+  }
+
+  const call = async (qs, opts = {}) => {
     if (solveFn) return solveFn(qs);
-    if (!webPage) webPage = await openSolverPage(session, cfg);
-    return solveViaWeb(webPage, qs, cfg);
+    return withThreadLock(session, async () => {
+      await rotateIfNeeded(session, cfg);
+      if (!webPage || (typeof webPage.isClosed === 'function' && webPage.isClosed())) {
+        reusedThread = threadState(session).sentCount > 0;
+        webPage = await openSolverPage(session, cfg);
+      }
+      return solveViaWeb(session, webPage, qs, cfg, opts);
+    });
   };
 
   try {
@@ -78,7 +91,7 @@ export async function solveQuestions({
         : [];
       if (retryQuestions.length) {
         try {
-          const rawRetry = await call(retryQuestions);
+          const rawRetry = await call(retryQuestions, { repair: true });
           const second = parseAnswerText(jsonAnswersToText(rawRetry) || rawRetry, retryQuestions);
           got = got.concat(second.answers);
           missing = second.unresolved;
@@ -92,7 +105,7 @@ export async function solveQuestions({
         for (const question of retryQuestions.slice(0, 3)) {
           if (!missing.some((m) => m.index === question.index)) continue;
           try {
-            const rawOne = await call([question]);
+            const rawOne = await call([question], { repair: true });
             const one = parseAnswerText(jsonAnswersToText(rawOne) || rawOne, [question]);
             if (one.answers.length) {
               got = got.concat(one.answers);
@@ -117,10 +130,22 @@ export async function solveQuestions({
     if (!answers.length) throw error;
     unresolved.push({ index: 0, reason: error?.code || 'solver-error' });
   } finally {
-    if (webPage && !keepOpen) await webPage.close().catch(() => {});
+    // 默认保留求解页（下一卷复用同一个对话）；只有显式关闭线程时才关。
+    if (webPage && !keepOpen && cfg.solver.web?.keepThread === false) {
+      await webPage.close().catch(() => {});
+    }
   }
 
   answers.sort((a, b) => a.index - b.index);
   saveCache(cache);
-  return { ok: true, mode: selected, answers, unresolved, cached: cachedCount, key: renderKey(answers) };
+  const state = session ? threadState(session) : null;
+  return {
+    ok: true,
+    mode: selected,
+    answers,
+    unresolved,
+    cached: cachedCount,
+    key: renderKey(answers),
+    ...(state ? { thread: { reused: reusedThread, prompts: state.sentCount } } : {}),
+  };
 }

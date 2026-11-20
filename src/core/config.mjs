@@ -42,6 +42,13 @@ export const DEFAULT_SOLVER = {
   cacheFile: 'adapter/answer-cache.json',
   web: {
     url: 'https://chat.deepseek.com/',
+    // 会话复用：默认沿用同一个对话，避免每次求解都新开对话触发风控
+    keepThread: true,
+    minIntervalMs: 15000, // 两次提问的最小间隔
+    maxPromptsPerThread: 40, // 单个对话最多提问数，到上限才换新对话
+    threadMaxAgeMs: 43200000, // 12 小时后换新对话
+    rotateCooldownMs: 300000, // 换新对话前冷却 5 分钟
+    threadFile: 'adapter/solver-thread.json',
     selectors: {
       input: 'textarea',
       send: 'button[type=submit]',
@@ -125,6 +132,12 @@ export function loadConfig(overrides = {}) {
 /** 缓存文件的绝对路径：配置里写相对路径时按仓库根解析，不依赖进程 cwd。 */
 export function cacheFilePath(cfg) {
   const rel = cfg?.solver?.cacheFile || DEFAULT_SOLVER.cacheFile;
+  return path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
+}
+
+/** 网页版求解会话记录文件：记下当前复用的对话地址与提问次数。 */
+export function threadFilePath(cfg) {
+  const rel = cfg?.solver?.web?.threadFile || DEFAULT_SOLVER.web.threadFile;
   return path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
 }
 

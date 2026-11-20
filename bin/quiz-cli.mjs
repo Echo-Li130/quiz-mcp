@@ -17,6 +17,7 @@ import { submitPaper } from '../src/core/submit.mjs';
 import { solveQuestions } from '../src/core/solver/index.mjs';
 import { learnCorrections } from '../src/core/solver/learn.mjs';
 import { clearQuestions } from '../src/core/solver/cache.mjs';
+import { resetThread } from '../src/core/solver/thread.mjs';
 import { runAuto } from '../src/core/auto/runner.mjs';
 
 const LAST_QUESTIONS = path.join(ROOT, 'adapter', 'last-questions.json');
@@ -172,6 +173,7 @@ async function main() {
         mode,
         batchSize: batch,
         refresh: flag('refresh'),
+        newThread: flag('new-thread'),
       });
       let applied = null;
       if (flag('commit') && result.answers.length) {
@@ -185,6 +187,7 @@ async function main() {
         cached: result.cached,
         key: result.key,
         unresolved: result.unresolved,
+        ...(result.thread ? { thread: result.thread } : {}),
         ...(applied ? { applied } : {}),
       });
     }
@@ -291,13 +294,14 @@ async function main() {
     case 'close': {
       // 先连上再关，否则新进程里没有已连接的浏览器，close 不会生效。
       await session.ensure().catch(() => null);
+      await resetThread(session, cfg, { close: true }).catch(() => {});
       return out({ ok: true, closed: await closeSession() });
     }
     default:
       return out({
         ok: false,
         error: '未知命令',
-        usage: 'quiz-cli <open|status|probe|tabs|focus|shot|rects|click|clicktext|back|collect|solve|learn|cache|auto|answer|submit|analysis|redo|close> [--url X] [--max N] [--out f] [--mode web|api] [--batch N] [--refresh] [--commit] [--confirm] [--learn] [--all] [--file f] [--detail] [--clear-on-pass] [--threshold N] [--interval S] [--attempts N] [--points N] [--stop-file f]',
+        usage: 'quiz-cli <open|status|probe|tabs|focus|shot|rects|click|clicktext|back|collect|solve|learn|cache|auto|answer|submit|analysis|redo|close> [--url X] [--max N] [--out f] [--mode web|api] [--batch N] [--refresh] [--new-thread] [--commit] [--confirm] [--learn] [--all] [--file f] [--detail] [--clear-on-pass] [--threshold N] [--interval S] [--attempts N] [--points N] [--stop-file f]',
       });
   }
 }

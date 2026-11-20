@@ -26,3 +26,11 @@ jobs:
 
       - name: MCP protocol test
         run: node test/mcp-client-test.mjs
+
+      - name: Solver unit tests
+        run: |
+          node test/solver-parse.test.mjs
+          node test/solver-cache.test.mjs
+          node test/solve-fixture.test.mjs
+          node test/solver-thread.test.mjs
+          node test/solver-pacing.test.mjs

@@ -68,3 +68,18 @@ await page.keyboard.press('ArrowRight');   // 关键：一次真实按键触发�
 一次把几十道题塞给网页版，容易被截断或触发限流。默认 `solver.batchSize = 8`，
 十几题以上建议保持或调小；求解结果会进 `adapter/answer-cache.json`，重做同一套卷子不会重复请求。
 
+## 11. 网页版求解：每次调用都新建对话会触发风控
+
+症状：批量答题时 `chat.deepseek.com` 里短时间内冒出大量新对话，随后被限流或提示异常。
+
+原因：旧版每次求解结束就关掉求解标签页，下一次再新开标签页、回首页发问——每次都是新对话。
+
+**现在的做法**（`src/core/solver/thread.mjs`）：
+
+- 求解页常驻，发送后记录会话地址（`/a/chat/s/...`），下次优先续用；
+- 两次提问之间至少间隔 `solver.web.minIntervalMs`（默认 15 秒）；
+- 单个对话提问数到 `maxPromptsPerThread`（默认 40）或超龄（默认 12 小时）才轮换，轮换前冷却；
+- 大批量刷题建议把 `solver.mode` 设为 `api`，完全不经过网页版。
+
+发送后页面若没有进入会话，会抛 `web-send-failed`：此时不要连续重试，先停一会儿或改用 api 模式。
+

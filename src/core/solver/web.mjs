@@ -1,11 +1,15 @@
 /**
- * 网页版 DeepSeek 求解：复用同一个 CDP 浏览器，新开一个标签页，不碰试卷页。
+ * 网页版 DeepSeek 求解：复用同一个 CDP 浏览器，并且**复用同一个对话**。
+ *
+ * 旧行为每次求解都新开标签页、回首页发问 = 每次一个新对话，批量答题时极易触发风控。
+ * 现在改为：常驻一个求解页 + 记录会话地址 + 提问间隔限速（见 thread.mjs）。
  *
  * 登录态留在浏览器 profile（.profiles/）里；未登录时抛出 login-required，
  * 页面保持打开，让人工在那个窗口里登录一次即可。
  */
-import { buildPrompt } from './prompt.mjs';
+import { buildPrompt, buildRepairPrompt } from './prompt.mjs';
 import { SolverError } from './errors.mjs';
+import { ensureThreadPage, waitForSlot, noteSend, isChatUrl } from './thread.mjs';
 
 async function lastReplyText(page, selector) {
   const texts = await page.locator(selector).allInnerTexts().catch(() => []);
@@ -14,19 +18,8 @@ async function lastReplyText(page, selector) {
 }
 
 export async function openSolverPage(session, cfg) {
-  const target = cfg.solver.web.url;
-  const origin = new URL(target).origin;
-  const existing = session.context.pages().find(
-    (p) => !p.isClosed() && p.url().startsWith(origin),
-  );
-  if (existing) {
-    await existing.bringToFront().catch(() => {});
-    return existing;
-  }
-  const page = await session.context.newPage();
-  await page.goto(target, { waitUntil: 'domcontentloaded', timeout: cfg.behavior.navigationTimeoutMs });
-  await page.waitForTimeout(1500);
-  return page;
+  if (!session.context) await session.ensure();
+  return ensureThreadPage(session, cfg);
 }
 
 async function assertLoggedIn(page, cfg) {
@@ -60,9 +53,22 @@ async function waitForReply(page, sel, timeoutMs, before) {
   return last;
 }
 
-export async function solveViaWeb(page, questions, cfg) {
+/** 发送后等地址变成会话地址（/a/chat/s/...）；老会话本来就在会话页，直接通过。 */
+async function waitForChatUrl(page, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (isChatUrl(page.url())) return true;
+    await page.waitForTimeout(250);
+  }
+  return isChatUrl(page.url());
+}
+
+export async function solveViaWeb(session, page, questions, cfg, opts = {}) {
   const sel = cfg.solver.web.selectors;
   const input = await assertLoggedIn(page, cfg);
+
+  // 限速：两次提问之间至少间隔 solver.web.minIntervalMs
+  await waitForSlot(session, cfg);
 
   const before = await lastReplyText(page, sel.reply);
   await input.click();
@@ -72,11 +78,17 @@ export async function solveViaWeb(page, questions, cfg) {
 
   // 中文用 insertText 最稳（逐字符 press 会丢字，见 docs/pitfalls.md）
   const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Input.insertText', { text: buildPrompt(questions) });
+  const prompt = opts.repair ? buildRepairPrompt(questions) : buildPrompt(questions);
+  await cdp.send('Input.insertText', { text: prompt });
   await page.waitForTimeout(200);
   await page.keyboard.press('Enter');
 
   const text = await waitForReply(page, sel, cfg.solver.timeoutMs, before);
   if (!text) throw new SolverError('web-empty-reply', '网页版没有返回内容（可能被风控或未登录）');
+
+  if (!(await waitForChatUrl(page))) {
+    throw new SolverError('web-send-failed', '发送后页面没有进入会话，可能被限流；请稍后重试或改用 api 模式');
+  }
+  noteSend(session, page, cfg);
   return text;
 }

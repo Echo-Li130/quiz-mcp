@@ -1,5 +1,29 @@
 # 更新日志
 
+## 0.3.0
+
+### 修复
+
+- **网页版求解不再每次都新开对话**：旧版每次 `quiz_solve` 结束都会关掉求解标签页，
+  下一次新开标签页并回首页发问，批量答题时短时间内会产生大量新对话，容易触发平台风控。
+  现在求解页常驻，发送后记录会话地址（`/a/chat/s/...`），后续优先续用同一对话；
+  进程重启或标签被关掉时也按记录的地址重新打开，而不是回首页。
+
+### 新增
+
+- **会话复用与限速配置**（`solver.web`）：`keepThread`、`minIntervalMs`、`maxPromptsPerThread`、
+  `threadMaxAgeMs`、`rotateCooldownMs`、`threadFile`。默认沿用同一对话、两次提问至少间隔 15 秒；
+  单会话提问数到 40 或超龄 12 小时才轮换，轮换前冷却 5 分钟。
+- **`quiz_solve` 新增 `newThread`**：临时强制开一个新对话；CLI 对应 `quiz-cli solve --new-thread`。
+- **`quiz_solve` 返回 `thread: { reused, prompts }`**：可确认这次是续用还是新会话。
+- **新错误码 `web-send-failed`**：发送后页面没有进入会话时抛出，不再把失败计入提问次数。
+- 重试改为复用 `buildRepairPrompt`（只补失败题），减少单卷的提问条数。
+
+### 测试
+
+- 新增 `test/solver-thread.test.mjs`（8 项）与 `test/solver-pacing.test.mjs`（3 项），
+  覆盖复用/续用/轮换/间隔/串行；CI 增加 Solver 单测步骤。
+
 ## 0.2.0
 
 ### 新增

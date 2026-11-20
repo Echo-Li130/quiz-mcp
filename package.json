@@ -1,6 +1,6 @@
 {
   "name": "quiz-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for browser-based quiz automation: collect questions, answer, submit, read mastery, redo.",
   "type": "module",
   "bin": {
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "start": "node bin/quiz-mcp.mjs",
-    "test": "node test/selftest.mjs && node test/mcp-client-test.mjs"
+    "test": "node test/selftest.mjs && node test/mcp-client-test.mjs && node test/solve-fixture.test.mjs && node test/solver-parse.test.mjs && node test/solver-cache.test.mjs && node test/solver-thread.test.mjs && node test/solver-pacing.test.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
